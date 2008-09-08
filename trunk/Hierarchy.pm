@@ -116,6 +116,7 @@ sub descendents {
 	keys %$both;
 }
 
+# empty the overridden values on descendents for hash
 sub _store_recursively {
     my ($self, $key, $value, $hash) = @_;
 
@@ -147,7 +148,8 @@ sub store {
 	}
     }
     return unless keys %$value;
-    $self->_store_recursively ($key, $value, $self->{hash});
+    $self->_store_recursively ($key, $value, $self->{hash})
+	unless $fast;
     $self->_store ($key, $value);
 }
 
