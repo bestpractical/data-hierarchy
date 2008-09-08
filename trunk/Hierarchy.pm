@@ -41,14 +41,13 @@ sub new {
 
     my $self = bless {@_}, $class;
     $self->{sep} ||= '/';
-    $self->{hash} = shift || {};
-    $self->{sticky} = {};
+    $self->{hash} ||= {};
+    $self->{sticky} ||= {};
     return $self;
 }
 
 sub key_safe {
     use Carp;
-    confess 'key unsafe' unless $_[1];
     confess 'key unsafe'
 	if length ($_[1]) > 1 && substr ($_[1], -1, 1) eq $_[0]->{sep};
 
@@ -111,6 +110,10 @@ sub descendents {
     my ($self, $key) = @_;
     use Carp;
     my $both = {%{$self->{hash}}, %{$self->{sticky} || {}}};
+
+    # If finding for everything, don't bother grepping
+    return sort keys %$both unless length($key);
+
     return sort grep {$key.$self->{sep} eq substr($_.$self->{sep}, 0,
 						  length($key)+1)}
 	keys %$both;
