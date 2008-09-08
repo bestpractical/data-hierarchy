@@ -129,14 +129,22 @@ sub _store_recursively {
     }
 }
 
-sub store {
-    my ($self, $key, $value) = @_;
+# use store_fast to avoid trimming duplicated value with ancestors
+sub store_fast {
+    my $self = shift;
+    $self->store (@_, 1);
+}
 
-    my $ovalue = $self->get ($key);
-    for (keys %$value) {
-	next unless defined $value->{$_};
-	delete $value->{$_}
-	    if exists $ovalue->{$_} && $ovalue->{$_} eq $value->{$_};
+sub store {
+    my ($self, $key, $value, $fast) = @_;
+
+    unless ($fast) {
+	my $ovalue = $self->get ($key);
+	for (keys %$value) {
+	    next unless defined $value->{$_};
+	    delete $value->{$_}
+		if exists $ovalue->{$_} && $ovalue->{$_} eq $value->{$_};
+	}
     }
     return unless keys %$value;
     $self->_store_recursively ($key, $value, $self->{hash});
