@@ -1,3 +1,7 @@
+[Changes for 0.31 - Sep 7, 2006]
+
+* Fix a test assuming hash key orders.
+
 [Changes for 0.30 - Jul 25, 2006]
 
 * Big rewrite, simplifying the API and documenting everything.
