@@ -1,0 +1,34 @@
+[Changes for 0.18 - May 29, 2004]
+
+* Fix - find sticky values was not working.
+
+[Changes for 0.17 - Mar 18, 2004]
+
+* New - store_override for overriding existing values on the entry.
+
+[Changes for 0.16 - Mar 17, 2004]
+
+* Fix - get_descenents is unhappy with older versions of Data::Hierarchy.
+
+[Changes for 0.15 - Mar 8, 2004]
+
+* New - properties beginning with '.' are now sticky to the entry.
+* New - merge function to merge two Data::Hierarchy objects.
+
+[Changes for 0.13 - Nov 4, 2003]
+
+* New - get_single and store_single.
+* Fix - get_* now return cloned hash to avoid being modified directly.
+
+[Changes for 0.12 - Oct 6, 2003]
+
+* New - Find descendents with a rule.
+* Fix - cleanup useless entries after store and store_recursively
+
+[Changes for 0.11 - Sep 26, 2003]
+
+* Fix an obvious edge case.
+
+[Changes for 0.10 - Sep 26, 2003]
+
+Initial release.
