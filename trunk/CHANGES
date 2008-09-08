@@ -1,3 +1,8 @@
+[Changes for 0.21 - Nov 10, 2004]
+
+* fix store_recursively for empty key, which should find
+  all descendents. [Autrijus]
+
 [Changes for 0.20 - Sep 18, 2004]
 
 * Make store_fast faster.

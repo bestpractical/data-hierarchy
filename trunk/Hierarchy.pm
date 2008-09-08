@@ -1,5 +1,5 @@
 package Data::Hierarchy;
-$VERSION = '0.20';
+$VERSION = '0.21';
 use strict;
 use Clone qw(clone);
 
@@ -47,9 +47,10 @@ sub new {
 }
 
 sub key_safe {
-    use Carp;
-    confess 'key unsafe'
-	if length ($_[1]) > 1 and rindex($_[1], $_[0]->{sep}) == length ($_[1]);
+    if (length ($_[1]) > 1 and rindex($_[1], $_[0]->{sep}) == length ($_[1])) {
+	require Carp;
+	Carp::confess('key unsafe');
+    }
     $_[1] =~ s/\Q$_[0]->{sep}\E+$//;
 }
 
@@ -100,13 +101,16 @@ sub merge {
 
 sub _descendents {
     my ($self, $hash, $key) = @_;
+
+    # If finding for everything, don't bother grepping
+    return sort keys %$hash unless length($key);
+
     return sort grep {index($_.$self->{sep}, $key.$self->{sep}) == 0}
 	keys %$hash;
 }
 
 sub descendents {
     my ($self, $key) = @_;
-    use Carp;
     my $both = {%{$self->{hash}}, %{$self->{sticky} || {}}};
 
     # If finding for everything, don't bother grepping
