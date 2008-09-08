@@ -49,8 +49,7 @@ sub new {
 sub key_safe {
     use Carp;
     confess 'key unsafe'
-	if length ($_[1]) > 1 && substr ($_[1], -1, 1) eq $_[0]->{sep};
-
+	if length ($_[1]) > 1 and rindex($_[1], $_[0]->{sep}) == length ($_[1]);
     $_[1] =~ s/\Q$_[0]->{sep}\E+$//;
 }
 
@@ -67,7 +66,7 @@ sub _store {
     my $oldvalue = $self->{hash}{$key} if exists $self->{hash}{$key};
     my $hash = {%{$oldvalue||{}}, %$value};
     for (keys %$hash) {
-	if (substr ($_, 0, 1) eq '.') {
+	if (index($_, '.') == 0) {
 	    defined $hash->{$_} ?
 		$self->{sticky}{$key}{$_} = $hash->{$_} :
 		delete $self->{sticky}{$key}{$_};
@@ -101,8 +100,7 @@ sub merge {
 
 sub _descendents {
     my ($self, $hash, $key) = @_;
-    return sort grep {$key.$self->{sep} eq substr($_.$self->{sep}, 0,
-						  length($key)+1)}
+    return sort grep {index($_.$self->{sep}, $key.$self->{sep}) == 0}
 	keys %$hash;
 }
 
@@ -114,8 +112,7 @@ sub descendents {
     # If finding for everything, don't bother grepping
     return sort keys %$both unless length($key);
 
-    return sort grep {$key.$self->{sep} eq substr($_.$self->{sep}, 0,
-						  length($key)+1)}
+    return sort grep {index($_.$self->{sep}, $key.$self->{sep}) == 0}
 	keys %$both;
 }
 
@@ -192,7 +189,7 @@ sub find {
     for my $entry (@datapoints) {
 	my $matched = 1;
 	for (keys %$value) {
-	    my $lookat = substr ($_, 0, 1) eq '.' ?
+	    my $lookat = (index($_, '.') == 0) ?
 		$self->{sticky}{$entry} : $self->{hash}{$entry};
 	    $matched = 0
 		unless exists $lookat->{$_}
@@ -215,8 +212,7 @@ sub get {
     $self->key_safe ($key);
     my $value = {};
     # XXX: could build cached pointer for fast traversal
-    my @datapoints = sort grep {$_.$self->{sep} eq substr($key.$self->{sep}, 0,
-							  length($_)+1)}
+    my @datapoints = sort grep {index($key.$self->{sep}, $_.$self->{sep}) == 0}
 	 keys %{$self->{hash}};
 
     for (@datapoints) {
