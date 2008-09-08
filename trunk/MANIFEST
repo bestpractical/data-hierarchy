@@ -1,8 +1,8 @@
 CHANGES
-Hierarchy.pm
+lib/Data/Hierarchy.pm
 Makefile.PL
-MANIFEST
-META.yml			Module meta-data (added by MakeMaker)
+MANIFEST			This list of files
+META.yml
 README
 t/1basic.t
 t/2basic-with-sep.t
@@ -10,3 +10,4 @@ t/3store-vs-store_recursively.t
 t/4merge.t
 t/5relative.t
 t/6wrappers.t
+t/7performance.t
