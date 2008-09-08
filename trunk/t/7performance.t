@@ -7,9 +7,9 @@ BEGIN {
     use_ok 'Data::Hierarchy';
 }
 
-use constant ITERATIONS => 2;
+use constant ITERATIONS => 5;
 use constant MULTIPLIER => 3;
-use constant N => 200;
+use constant N => 5_000;
 
 # Returns the power of n that $code grows by.
 sub order_of_growth {
@@ -36,4 +36,4 @@ my $growth = order_of_growth(N, sub {
                                  $d->store("/A", $kv);
                              });
 
-is ($growth < 1.5, "Data::Hierarchy scales poorly: $growth");
+ok ($growth < 1.4, "Data::Hierarchy scales poorly: $growth");

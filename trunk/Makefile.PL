@@ -9,6 +9,7 @@ WriteMakefile(
     DISTNAME            => 'Data-Hierarchy',
     PREREQ_PM           => {
         Test::Exception => '0',
+        Class::Accessor::Fast => '0',
     },
     dist                => {
         COMPRESS        => 'gzip -9',
