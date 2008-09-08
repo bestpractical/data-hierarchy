@@ -1,3 +1,18 @@
+[Changes for 0.20 - Sep 18, 2004]
+
+* Make store_fast faster.
+
+[Changes for 0.19 - Sep 13, 2004]
+
+* Use index rather than subtr, where Benchmark shows 20%-40%
+  performance improvements. [Autrijus Tang]
+
+* New API: store_fast.
+
+* Allow options in constructor. [Autrijus Tang]
+
+* Properly escape for regex.
+
 [Changes for 0.18 - May 29, 2004]
 
 * Fix - find sticky values was not working.
