@@ -384,7 +384,9 @@ sub merge {
 
     $self->_path_safe($path);
 
-    my $node = dclone($other->_get_subtree($path));
+    my $node = $other->_get_subtree($path);
+
+    $node = defined $node ? dclone($node) : Data::Hierarchy::Node->new;
 
     # We need to make sure that things that are inherited onto $path
     # in the other tree end up on $path in our tree.
