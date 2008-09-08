@@ -43,16 +43,24 @@ sub new {
     return $self;
 }
 
+sub key_safe {
+    use Carp;
+    confess 'key unsafe' unless $_[1];
+    confess 'key unsafe'
+	if length ($_[1]) > 1 && substr ($_[1], -1, 1) eq $_[0]->{sep};
+
+    $_[1] =~ s/\Q$_[0]->{sep}\E+$//;
+}
+
 sub store_single {
     my ($self, $key, $value) = @_;
-    $key =~ s/$self->{sep}$//;
+    $self->key_safe ($key);
     $self->{hash}{$key} = $value;
 }
 
 sub _store {
     my ($self, $key, $value) = @_;
-
-    $key =~ s/$self->{sep}$//;
+    $self->key_safe ($key);
 
     my $oldvalue = $self->{hash}{$key} if exists $self->{hash}{$key};
     my $hash = {%{$oldvalue||{}}, %$value};
@@ -108,7 +116,7 @@ sub descendents {
 sub _store_recursively {
     my ($self, $key, $value, $hash) = @_;
 
-    $key =~ s/$self->{sep}$//;
+    $self->key_safe ($key);
     my @datapoints = $self->_descendents ($hash, $key);
 
     for (@datapoints) {
@@ -152,6 +160,7 @@ sub store_override {
     $self->_store ($key, $value);
 }
 
+# Useful for removing sticky properties.
 sub store_recursively {
     my ($self, $key, $value) = @_;
 
@@ -162,7 +171,7 @@ sub store_recursively {
 
 sub find {
     my ($self, $key, $value) = @_;
-    $key =~ s/$self->{sep}$//;
+    $self->key_safe ($key);
     my @items;
     my @datapoints = $self->descendents($key);
 
@@ -189,9 +198,7 @@ sub get_single {
 
 sub get {
     my ($self, $key, $rdonly) = @_;
-    use Carp;
-    confess unless $key;
-    $key =~ s/$self->{sep}$//;
+    $self->key_safe ($key);
     my $value = {};
     # XXX: could build cached pointer for fast traversal
     my @datapoints = sort grep {$_.$self->{sep} eq substr($key.$self->{sep}, 0,
