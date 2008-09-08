@@ -8,7 +8,6 @@ WriteMakefile(
     VERSION_FROM        => 'Hierarchy.pm',
     DISTNAME            => 'Data-Hierarchy',
     PREREQ_PM           => {
-	'Clone'		=> '0',
         Test::Exception => '0',
     },
     dist                => {

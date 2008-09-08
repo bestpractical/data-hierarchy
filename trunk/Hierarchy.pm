@@ -1,7 +1,7 @@
 package Data::Hierarchy;
 $VERSION = '0.30';
 use strict;
-use Clone qw(clone);
+use Storable qw(dclone);
 # XXX consider using Moose
 
 =head1 NAME
@@ -166,12 +166,12 @@ sub get {
 
     for (@datapoints) {
 	my $newv = $self->{hash}{$_};
-	$newv = clone $newv unless $dont_clone;
+	$newv = dclone $newv unless $dont_clone;
 	$value = {%$value, %$newv};
     }
     if (exists $self->{sticky}{$path}) {
 	my $newv = $self->{sticky}{$path};
-	$newv = clone $newv unless $dont_clone;
+	$newv = dclone $newv unless $dont_clone;
 	$value = {%$value, %$newv}
     }
     return wantarray ? ($value, @datapoints) : $value;
