@@ -27,8 +27,6 @@ sub order_of_growth {
 
 my $growth = order_of_growth(N, sub {
                                  my $n = shift;
-                                 diag "doing $n";
-                                 
                                  my $d = Data::Hierarchy->new;
                                  my $kv = { foo => 'bar' };
                                  while ($n > 0) {

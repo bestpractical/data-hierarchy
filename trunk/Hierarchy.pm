@@ -338,9 +338,24 @@ sub _store {
 sub _ancestors {
     my ($self, $hash, $path) = @_;
 
+    my @ancestors;
+    push @ancestors, '' if exists $hash->{''};
+
+    # Special case the root.
+    return @ancestors if $path eq '';
+
+    my @parts = split m{\Q$self->{sep}}, $path;
+    # Remove empty string at the front.
+    shift @parts;
+
+    my $current = '';
+    for my $part (@parts) {
+        $current .= $self->{sep} . $part;
+        push @ancestors, $current if exists $hash->{$current};
+    }
+
     # XXX: could build cached pointer for fast traversal
-    return sort grep {index($path.$self->{sep}, $_.$self->{sep}) == 0}
-	keys %$hash;
+    return @ancestors;
 }
 
 # Internal method.
