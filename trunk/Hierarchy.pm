@@ -485,9 +485,9 @@ sub _remove_redundant_properties_and_undefs {
 
 # These are for backwards compatibility only.
 
-sub store_recursively { my $self = shift; $self->store(@_, override_sticky_descendents => 1); }
-sub store_fast        { my $self = shift; $self->store(@_, override_descendents => 0); }
-sub store_override    { my $self = shift; $self->store(@_, override_descendents => 0); }
+sub store_recursively { my $self = shift; $self->store(@_, {override_sticky_descendents => 1}); }
+sub store_fast        { my $self = shift; $self->store(@_, {override_descendents => 0}); }
+sub store_override    { my $self = shift; $self->store(@_, {override_descendents => 0}); }
 
 package Data::Hierarchy::Relative;
 
@@ -548,7 +548,8 @@ sub to_absolute {
 
 =head1 AUTHORS
 
-Chia-liang Kao E<lt>clkao@clkao.orgE<gt> and David Glasser E<lt>glasser@mit.eduE<gt>
+Chia-liang Kao E<lt>clkao@clkao.orgE<gt>
+David Glasser E<lt>glasser@mit.eduE<gt>
 
 =head1 COPYRIGHT
 
