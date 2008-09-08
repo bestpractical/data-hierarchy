@@ -1,7 +1,9 @@
 package Data::Hierarchy;
-$VERSION = '0.31';
+$VERSION = '0.40';
 use strict;
 use Storable qw(dclone);
+
+use Carp ();
 # XXX consider using Moose
 
 =head1 NAME
@@ -87,8 +89,7 @@ sub new {
 
     my $self = bless {}, $class;
     $self->{sep} = $args{sep};
-    $self->{hash} = {};
-    $self->{sticky} = {};
+    $self->{root} = Data::Hierarchy::Node->new;
     return $self;
 }
 
@@ -111,7 +112,7 @@ the same name.
 
 If the C<override_sticky_descendents> option is given with a true
 value, it eliminates any sticky property in a descendent of C<$path>
-with the same name.  override it.
+with the same name.
 
 A value of undef removes that value; note, though, that
 if an ancestor of C<$path> defines that property, the ancestor's value
@@ -128,34 +129,42 @@ it will print 'top'.
 
 sub store {
     my $self = shift;
-    $self->_store_no_cleanup(@_);
-    $self->_remove_redundant_properties_and_undefs;
-}
-
-# Internal method.
-#
-# Does everything that store does, except for the cleanup at the
-# end (appropriate for use in e.g. merge, which calls this a bunch of
-# times and then does cleanup at the end).
-
-sub _store_no_cleanup {
-    my $self = shift;
+    $self->_autoupgrade;
     my $path = shift;
     my $props = shift;
     my $opts = shift || {};
-
-    $self->_path_safe ($path);
 
     my %args = (
                override_descendents => 1,
                override_sticky_descendents => 0,
                 %$opts);
 
-    $self->_remove_matching_properties_recursively($path, $props, $self->{hash})
-      if $args{override_descendents};
-    $self->_remove_matching_properties_recursively($path, $props, $self->{sticky})
-      if $args{override_sticky_descendents};
-    $self->_store ($path, $props);
+
+    my $node = $self->_get_subtree($path);
+    my $node_is_new = 0;
+    if ($node) {
+        $self->_remove_matching_properties_recursively($node, $props, \%args, 1);
+    } else {
+        $node = Data::Hierarchy::Node->new;
+        $node_is_new = 1;
+    }
+
+    my $current_props = $self->get($path, "don't clone");
+
+    while (my ($key, $val) = each %$props) {
+        if (defined $val) {
+            if (not defined $current_props->{$key} or
+                $val ne $current_props->{$key}) {
+                $node->set_key($key, $val);
+            }
+        } else {
+            $node->delete_key($key);
+        }
+    }
+
+    if ($node_is_new or $node->is_empty) {
+        $self->_set_subtree($path, $node);
+    }
 }
 
 =item C<get $path, [$dont_clone]>
@@ -170,24 +179,48 @@ of the ancestral paths of C<$path> which contain non-sticky properties
 
 =cut
 
+sub _add_all_to_hash {
+    my($to, $from, $dont_clone) = @_;
+
+    $from = dclone $from unless $dont_clone;
+    @{$to}{keys %$from} = values %$from;
+}
+
 sub get {
     my ($self, $path, $dont_clone) = @_;
-    $self->_path_safe ($path);
-    my $value = {};
+    $self->_autoupgrade;
 
-    my @datapoints = $self->_ancestors($self->{hash}, $path);
+    my $parts = $self->_path_parts($path);
+    my $node = $self->{root};
 
-    for (@datapoints) {
-	my $newv = $self->{hash}{$_};
-	$newv = dclone $newv unless $dont_clone;
-	$value = {%$value, %$newv};
+    my $props = {};
+    my @datapoints;
+
+    if (keys %{ $node->inherited }) {
+        push @datapoints, '';
+        _add_all_to_hash($props, $node->inherited, $dont_clone);
     }
-    if (exists $self->{sticky}{$path}) {
-	my $newv = $self->{sticky}{$path};
-	$newv = dclone $newv unless $dont_clone;
-	$value = {%$value, %$newv}
+
+    my $current_path = '';
+    for my $part (@$parts) {
+        $current_path .= $self->{sep} . $part;
+
+        $node = $node->kids->{$part};
+        unless ($node) {
+            return wantarray ? ($props, @datapoints) : $props;
+        }
+
+        if (keys %{ $node->inherited }) {
+            push @datapoints, $current_path;
+            _add_all_to_hash($props, $node->inherited, $dont_clone);
+        }
     }
-    return wantarray ? ($value, @datapoints) : $value;
+
+    # Every part existed, so $node is now precisely what they asked
+    # for.
+    _add_all_to_hash($props, $node->uninherited, $dont_clone);
+
+    return wantarray ? ($props, @datapoints) : $props;
 }
 
 =item C<find $path, $property_regexps>
@@ -203,24 +236,136 @@ it has any value defined there.)  Properties can be sticky or not.
 
 sub find {
     my ($self, $path, $prop_regexps) = @_;
-    $self->_path_safe ($path);
-    my @items;
-    my @datapoints = $self->_all_descendents($path);
+    $self->_autoupgrade;
 
-    for my $subpath (@datapoints) {
-	my $matched = 1;
-	for (keys %$prop_regexps) {
-	    my $lookat = (index($_, '.') == 0) ?
-		$self->{sticky}{$subpath} : $self->{hash}{$subpath};
-	    $matched = 0
-		unless exists $lookat->{$_}
-			&& $lookat->{$_} =~ m/$prop_regexps->{$_}/;
-	    last unless $matched;
-	}
-	push @items, $subpath
-	    if $matched;
+    my $node = $self->_get_subtree($path);
+
+    return unless $node;
+
+    my $items = [];
+
+    my $recursive;
+    $recursive = sub {
+        my($subpath, $subnode) = @_;
+
+        my $matched = 1;
+        for (keys %$prop_regexps) {
+            my $lookat = _is_inherited($_) ?
+              $subnode->inherited : $subnode->uninherited;
+            $matched = 0
+              unless exists $lookat->{$_}
+                && $lookat->{$_} =~ m/$prop_regexps->{$_}/;
+            last unless $matched;
+        }
+        push @$items, $self->_root_without_sep($subpath) if $matched;
+
+        my $kids = $subnode->kids;
+        while (my ($name, $subsubnode) = each %$kids) {
+            $recursive->($subpath . $self->{sep} . $name,
+                         $subsubnode);
+        }
+    };
+
+    $recursive->($self->_root_without_sep($path), $node);
+
+    return @$items;
+}
+
+=item C<defines $path, $property>
+
+Given a path and a property name, returns whether or not
+that property (possibly sticky) is defined B<at C<$path> itself>
+(not in an ancestor).
+
+=cut
+
+sub defines {
+    my ($self, $path, $property) = @_;
+    $self->_autoupgrade;
+
+    my $node = $self->_get_subtree($path);
+
+    return unless $node;
+    return unless $node->get_key($property);
+    return 1;
+}
+
+# Internal method.
+#
+# Returns whether a given property name is inherited.
+
+sub _is_inherited {
+    my $name = shift;
+    return index($name, '.') != 0;
+}
+
+# Internal method.
+#
+# Returns its argument, unless it's just a sep, in which case it
+# returns the empty string.
+
+sub _root_without_sep {
+    my ($self, $path) = @_;
+    return $path eq $self->{sep} ? '' : $path;
+}
+
+# Internal method.
+#
+# Returns the Data::Hierarchy::Node for the given path, if it exists.
+
+sub _get_subtree {
+    my ($self, $path) = @_;
+
+    my $parts = $self->_path_parts($path);
+
+    my $node = $self->{root};
+    for my $part (@$parts) {
+        $node = $node->kids->{$part};
+        return unless $node;
     }
-    return @items;
+
+    return $node;
+}
+
+# Internal method.
+#
+# Sets the Data::Hierarchy::Node for the given path, autovivifying
+# parents.  Note that this essentially overwrites the entire subtree
+# at the path.  $new_node may be undefined (or empty), in which case
+# it deletes the subtree.
+
+sub _set_subtree {
+    my ($self, $path, $new_node) = @_;
+    my $parts = $self->_path_parts($path);
+
+    unless (@$parts) {
+        $self->{root} = $new_node || Data::Hierarchy::Node->new;
+        return;
+    }
+
+    my $recursive;
+    $recursive = sub {
+        my $node = shift;
+        my $kid_name = shift @$parts;
+
+        if (@$parts) {
+            my $kid = $node->kids->{$kid_name} ||= Data::Hierarchy::Node->new;
+
+            $recursive->($kid);
+
+            if ($kid->is_empty) {
+                delete $node->kids->{$kid_name};
+            }
+        } else {
+            if (defined $new_node and not $new_node->is_empty) {
+                $node->kids->{$kid_name} = $new_node;
+            } else {
+                delete $node->kids->{$kid_name};
+            }
+        }
+    };
+
+    $recursive->($self->{root});
 }
 
 =item C<merge $other_hierarchy, $path>
@@ -235,21 +380,56 @@ erased first.
 
 sub merge {
     my ($self, $other, $path) = @_;
-    $self->_path_safe ($path);
+    $self->_autoupgrade;
 
-    my %datapoints = map {$_ => 1} ($self->_all_descendents ($path),
-				    $other->_all_descendents ($path));
-    for my $datapoint (sort keys %datapoints) {
-	my $my_props = $self->get ($datapoint);
-	my $other_props = $other->get ($datapoint);
-	for (keys %$my_props) {
-	    $other_props->{$_} = undef
-		unless defined $other_props->{$_};
-	}
-	$self->_store_no_cleanup ($datapoint, $other_props);
+    $self->_path_safe($path);
+
+    my $node = dclone($other->_get_subtree($path));
+
+    # We need to make sure that things that are inherited onto $path
+    # in the other tree end up on $path in our tree.
+    my $props_on_merge_root = $other->get($path);
+    while (my ($k, $v) = each %$props_on_merge_root) {
+        $node->set_key($k, $v);
     }
 
-    $self->_remove_redundant_properties_and_undefs;
+    $self->_set_subtree($path => $node);
+
+    return;
+}
+
+=item C<move $from, $to>
+
+Moves all of the properties under the path C<$from> to the path C<$to>
+Given a second L<Data::Hierarchy> object and a path, copies all the
+properties from the other object at C<$path> or below into the
+corresponding paths in the object this method is invoked on.  All
+properties from the object this is invoked on at C<$path> or below are
+erased first.
+
+=cut
+
+
+sub move {
+    my ($self, $from, $to) = @_;
+    $self->_autoupgrade;
+
+    $self->_path_safe($from);
+    $self->_path_safe($to);
+
+    my $node = dclone($self->_get_subtree($from));
+
+    # We need to make sure that things that are inherited onto $from
+    # end up on $to.
+    my $props_on_copy_root = $self->get($from);
+    while (my ($k, $v) = each %$props_on_copy_root) {
+        $node->set_key($k, $v);
+    }
+
+    $self->_set_subtree($from, undef);
+    $self->_set_subtree($to, $node);
+
+    return;
 }
 
 =item C<to_relative $base_path>
@@ -267,31 +447,51 @@ needs to be moved to C</home/awesome_project>, you can do
 
 (Data::Hierarchy::Relative objects may be a more convenient
 serialization format than Data::Hierarchy objects, if they are
-tracking the state of some relocatable resource.)
+tracking the state of some relocatable resource.  The (explicitly
+undocumented) format of Data::Hierarchy::Relative objects will not
+change with new versions of Data::Hierarchy.)
 
 =cut
 
 sub to_relative {
     my $self = shift;
+    $self->_autoupgrade;
     my $base_path = shift;
 
-    return Data::Hierarchy::Relative->new($base_path, %$self);
+    return Data::Hierarchy::Relative->new($self, $base_path);
+}
+
+=item C<save>
+
+Returns a special Data::Hierarchy::Savable object which represents the
+same data as this object.  While the internal representation of
+Data::Hierarchy may change from version to version of this module, the
+representation of Data::Hierarchy::Savable (which is explicitly
+undocumented) will not change; thus, you may safely serialize a
+Data::Hierarchy::Savable object and reload it even if Data::Hierarchy
+has been upgraded.
+
+The B<only> thing you can do with a Data::Hierarchy::Savable object is
+call C<load> on it, which returns a new L<Data::Hierarchy>.
+
+=cut
+
+sub save {
+    my $self = shift;
+    $self->_autoupgrade;
+
+    return Data::Hierarchy::Savable->new($self);
 }
 
 # Internal method.
 #
-# Dies if the given path has a trailing slash and is not the root.  If it is root,
-# destructively changes the path given as argument to the empty string.
+# Dies if the given path has a trailing slash and is not the root.
 
 sub _path_safe {
-    # Have to do this explicitly on the elements of @_ in order to be destructive
-    if ($_[1] eq $_[0]->{sep}) {
-        $_[1] = '';
-        return;
-    }
-
     my $self = shift;
     my $path = shift;
+
+    return if $path eq $self->{sep};
 
     my $location_of_last_separator = rindex($path, $self->{sep});
     return if $location_of_last_separator == -1;
@@ -300,201 +500,72 @@ sub _path_safe {
 
     return unless $location_of_last_separator == $potential_location_of_trailing_separator;
 
-    require Carp;
     Carp::confess('non-root path has a trailing slash!');
 }
 
 # Internal method.
 #
-# Actually does property updates (to hash or sticky, depending on name).
-
-sub _store {
-    my ($self, $path, $new_props) = @_;
-
-    my $old_props = $self->{hash}{$path} if exists $self->{hash}{$path};
-    my $merged_props = {%{$old_props||{}}, %$new_props};
-    for (keys %$merged_props) {
-	if (index($_, '.') == 0) {
-	    defined $merged_props->{$_} ?
-		$self->{sticky}{$path}{$_} = $merged_props->{$_} :
-		delete $self->{sticky}{$path}{$_};
-	    delete $merged_props->{$_};
-	}
-	else {
-	    delete $merged_props->{$_}
-		unless defined $merged_props->{$_};
-	}
-    }
-
-    $self->{hash}{$path} = $merged_props;
-}
-
-# Internal method.
+# Returns an array reference containing the parts of the path.
+# Trailing slashes are ignored.
 #
-# Given a hash (probably $self->{hash}, $self->{sticky}, or their union),
-# returns a sorted list of the paths with data that are ancestors of the given
-# path (including it itself).
-
-sub _ancestors {
-    my ($self, $hash, $path) = @_;
-
-    my @ancestors;
-    push @ancestors, '' if exists $hash->{''};
-
-    # Special case the root.
-    return @ancestors if $path eq '';
-
-    my @parts = split m{\Q$self->{sep}}, $path;
-    # Remove empty string at the front.
-    shift @parts;
-
-    my $current = '';
-    for my $part (@parts) {
-        $current .= $self->{sep} . $part;
-        push @ancestors, $current if exists $hash->{$current};
-    }
-
-    # XXX: could build cached pointer for fast traversal
-    return @ancestors;
-}
-
-# Internal method.
+# Dies if the given path has a trailing slash and is not the root.
 #
-# Given a hash (probably $self->{hash}, $self->{sticky}, or their union),
-# returns a sorted list of the paths with data that are descendents of the given
-# path (including it itself).
+# Examples:
+# ''          => []
+# '/'         => []
+# '/foo/bar'  => [qw/foo bar/]
+# '/foo/bar/' => [qw/foo bar/]
 
-sub _descendents {
-    my ($self, $hash, $path) = @_;
-
-    # If finding for everything, don't bother grepping
-    return sort keys %$hash unless length($path);
-
-    return sort grep {index($_.$self->{sep}, $path.$self->{sep}) == 0}
-	keys %$hash;
-}
-
-# Internal method.
-#
-# Returns a sorted list of all of the paths which currently have any
-# properties (sticky or not) that are descendents of the given path
-# (including it itself).
-#
-# (Note that an arg of "/f" can return entries "/f" and "/f/g" but not
-# "/foo".)
-
-sub _all_descendents {
-    my ($self, $path) = @_;
-    $self->_path_safe ($path);
-
-    my $both = {%{$self->{hash}}, %{$self->{sticky} || {}}};
-
-    return $self->_descendents($both, $path);
-}
-
-# Internal method.
-#
-# Given a path, a hash reference of properties, and a hash reference
-# (presumably {hash} or {sticky}), removes all properties from the
-# hash at the path or its descendents with the same name as a name in
-# the given property hash. (The values in the property hash are
-# ignored.)
-
-sub _remove_matching_properties_recursively {
-    my ($self, $path, $remove_props, $hash) = @_;
-
-    my @datapoints = $self->_descendents ($hash, $path);
-
-    for my $datapoint (@datapoints) {
-	delete $hash->{$datapoint}{$_} for keys %$remove_props;
-	delete $hash->{$datapoint} unless %{$hash->{$datapoint}};
-    }
-}
-
-# Internal method.
-#
-# Returns the parent of a path; this is a purely textual operation, and is not necessarily a datapoint.
-# Do not pass in the root.
-
-sub _parent {
+sub _path_parts {
     my $self = shift;
     my $path = shift;
 
-    return if $path eq q{} or $path eq $self->{sep};
+    return [] if $path eq '' or $path eq $self->{sep};
 
-    # For example, say $path is "/foo/bar/baz";
-    # then $last_separator is 8.
-    my $last_separator = rindex($path, $self->{sep});
+    $self->_path_safe($path);
 
-    # This happens if a path is passed in without a leading
-    # slash. This is really a bug, but old version of
-    # SVK::Editor::Status did this, and we might as well make it not
-    # throw unintialized value errors, since it works otherwise. At
-    # some point in the future this should be changed to a plain
-    # "return" or an exception.
-    return '' if $last_separator == -1;
+    my $parts = [ split m{\Q$self->{sep}}, $path ];
 
-    return substr($path, 0, $last_separator);
+    # Remove empty part at the front.
+    Carp::confess("Must pass an absolute path to _path_parts") if length $parts->[0];
+    shift @$parts;
+
+    return $parts;
 }
 
 # Internal method.
 #
-# Cleans up the hash and sticky by removing redundant properties,
-# undef properties, and empty property hashes.
+# Given a node, a hash reference of properties, and args
+# override_descendents and override_sticky_descendents, removes all
+# properties from the hashes at the path or its descendents with the
+# same name as a name in the given property hash. (The values in the
+# property hash are ignored.)  It always removes everything at the top
+# level.
 
-sub _remove_redundant_properties_and_undefs {
-    my $self = shift;
+sub _remove_matching_properties_recursively {
+    my ($self, $node, $remove_props, $args, $top_level) = @_;
 
-    # This is not necessarily the most efficient way to implement this
-    # cleanup, but that can be fixed later.
-
-    # By sorting the keys, we guarantee that we never get to a path
-    # before we've dealt with all of its ancestors.
-    for my $path (sort keys %{$self->{hash}}) {
-        my $props = $self->{hash}{$path};
-
-        # First check for undefs.
-        for my $name (keys %$props) {
-            if (not defined $props->{$name}) {
-                delete $props->{$name};
-            }
+    for my $k (keys %$remove_props) {
+        if (_is_inherited($k)) {
+            delete $node->inherited->{$k}
+              if $args->{override_descendents} or $top_level;
+        } else {
+            delete $node->uninherited->{$k}
+              if $args->{override_sticky_descendents} or $top_level;
         }
-
-        # Now check for redundancy.
-
-        # The root can't be redundant.
-        if (length $path) {
-            my $parent = $self->_parent($path);
-
-            my $parent_props = $self->get($parent);
-
-            for my $name (keys %$props) {
-                # We've already dealt with undefs in $props, so we
-                # don't need to check that for defined.
-                if (defined $parent_props->{$name} and
-                    $props->{$name} eq $parent_props->{$name}) {
-                    delete $props->{$name};
-                }
-            }
-        }
-
-        # Clean up empty property hashes.
-        delete $self->{hash}{$path} unless %{ $self->{hash}{$path} };
     }
 
-    for my $path (sort keys %{$self->{sticky}}) {
-        # We only have to remove undefs from sticky, since there is no
-        # inheritance.
-        my $props = $self->{sticky}{$path};
+    return unless $args->{override_descendents} or
+      $args->{override_sticky_descendents};
 
-        for my $name (keys %$props) {
-            if (not defined $props->{$name}) {
-                delete $props->{$name};
-            }
+    my $kids = $node->kids;
+    while (my ($name, $subnode) = each %$kids) {
+        $self->_remove_matching_properties_recursively($subnode,
+                                                       $remove_props,
+                                                       $args);
+        if ($subnode->is_empty) {
+            delete $kids->{$name};
         }
-
-        # Clean up empty property hashes.
-        delete $self->{sticky}{$path} unless %{ $self->{sticky}{$path} };
     }
 }
 
@@ -504,33 +575,65 @@ sub store_recursively { my $self = shift; $self->store(@_, {override_sticky_desc
 sub store_fast        { my $self = shift; $self->store(@_, {override_descendents => 0}); }
 sub store_override    { my $self = shift; $self->store(@_, {override_descendents => 0}); }
 
+# Internal method.
+#
+# Checks to see if this is an old (pre-0.4) Data::Hierarchy loaded via
+# YAML or some such, and modernizes it if it is.  Note that such old
+# objects had the same format that Data::Hierarchy::Savable does now.
+
+sub _autoupgrade {
+    my $self = shift;
+    return unless $self->{hash} or $self->{sticky};
+
+    # Aha!  This is an old object!
+    bless $self, 'Data::Hierarchy::Savable';
+    my $new_self = $self->load;
+    bless $self, 'Data::Hierarchy';
+    %$self = %$new_self;
+    return;
+}
+
 package Data::Hierarchy::Relative;
 
 sub new {
     my $class = shift;
+    my $dh = shift;
     my $base_path = shift;
 
-    my %args = @_;
-
-    my $self = bless { sep => $args{sep} }, $class;
+    my $self = bless { sep => $dh->{sep},
+                       hash => {},
+                       sticky => {}
+                     }, $class;
 
     my $base_length = length $base_path;
 
-    for my $item (qw/hash sticky/) {
-        my $original = $args{$item};
-        my $result = {};
+    my $get_relative_path = sub {
+        my $path = shift;
+        unless ($path eq $base_path or index($path, $base_path . $self->{sep}) == 0) {
+            Carp::confess("$path is not a child of $base_path");
+        }
+        return substr $path, $base_length;
+    };
 
-        for my $path (sort keys %$original) {
-            unless ($path eq $base_path or index($path, $base_path . $self->{sep}) == 0) {
-                require Carp;
-                Carp::confess("$path is not a child of $base_path");
-            }
-            my $relative_path = substr($path, $base_length);
-            $result->{$relative_path} = $original->{$path};
+    my $recursive;
+    $recursive = sub {
+        my ($node, $path) = @_;
+
+        if (%{ $node->inherited }) {
+            my $rel_path = $get_relative_path->($path);
+            $self->{hash}{$rel_path} = { %{ $node->inherited } };
         }
 
-        $self->{$item} = $result;
-    }
+        if (%{ $node->uninherited }) {
+            my $rel_path = $get_relative_path->($path);
+            $self->{sticky}{$rel_path} = { %{ $node->uninherited } };
+        }
+
+        for my $kid (sort keys %{ $node->kids }) {
+            $recursive->($node->kids->{$kid}, $path . $self->{sep} . $kid);
+        }
+    };
+    $recursive->($dh->{root}, '');
 
     return $self;
 }
@@ -539,27 +642,97 @@ sub to_absolute {
     my $self = shift;
     my $base_path = shift;
 
-    my $tree = { sep => $self->{sep} };
+    my $tree = Data::Hierarchy->new( sep => $self->{sep} );
 
     for my $item (qw/hash sticky/) {
         my $original = $self->{$item};
-        my $result = {};
 
-        for my $path (keys %$original) {
-            $result->{$base_path . $path} = $original->{$path};
+        while (my ($path, $props) = each %$original) {
+            $tree->store($base_path . $path, $props, { override_descendents => 0 });
         }
-
-        $tree->{$item} = $result;
     }
 
-    bless $tree, 'Data::Hierarchy';
-
     return $tree;
+}
+
+package Data::Hierarchy::Savable;
+use base 'Data::Hierarchy::Relative';
+
+sub new {
+    my $class = shift;
+    my $dh = shift;
+    return $class->SUPER::new($dh, '');
+}
+
+sub load {
+    my $self = shift;
+    return $self->to_absolute('');
+}
+
+package Data::Hierarchy::Node;
+use base 'Class::Accessor::Fast';
+
+__PACKAGE__->mk_accessors(qw/inherited uninherited kids/);
+
+sub new {
+    my $class = shift;
+    my $self = $class->SUPER::new(@_);
+    $self->inherited({}) unless defined $self->inherited;
+    $self->uninherited({}) unless defined $self->uninherited;
+    $self->kids({}) unless defined $self->kids;
+    return $self;
+}
+
+sub is_empty {
+    my $self = shift;
+    return (keys %{ $self->inherited } == 0 &&
+            keys %{ $self->uninherited } == 0 &&
+            keys %{ $self->kids } == 0);
+}
+
+sub _is_inherited { Data::Hierarchy::_is_inherited(@_) }
+
+sub delete_key {
+    my ($self, $k) = @_;
+    if (_is_inherited($k)) {
+        delete $self->inherited->{$k};
+    } else {
+        delete $self->uninherited->{$k};
+    }
+}
+
+sub get_key {
+    my ($self, $k) = @_;
+    if (_is_inherited($k)) {
+        return $self->inherited->{$k};
+    } else {
+        return $self->uninherited->{$k};
+    }
+}
+
+sub set_key {
+    my ($self, $k, $v) = @_;
+    if (_is_inherited($k)) {
+        $self->inherited->{$k} = $v;
+    } else {
+        $self->uninherited->{$k} = $v;
+    }
 }
 
 1;
 
 =back
+
+=head1 COMPATIBILITY
+
+A serialized (via YAML, FreezeThaw, etc) Data::Hierarchy::Savable or
+Data::Hierarchy::Relative object should be readable by future versions
+of this module; we do not make the same guarantee for Data::Hierarchy
+objects themselves.  Versions of this module prior to 0.40 used an
+internal representation had no Data::Hierarchy::Savable; in order to
+not break applications which directly serialized Data::Hierarchy
+objects, the module does attempt to convert pre-0.40 objects into
+modern objects.
 
 =head1 AUTHORS
 

@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-use Test::More tests => 16;
+use Test::More tests => 17;
 use strict;
 use warnings;
 BEGIN {
@@ -42,6 +42,9 @@ is (($tree->get ('/public'))[-1], '');
 
 is_deeply ([$tree->find ('/', {access => qr/.*/})],
            ['','/blahblah','/private']);
+
+is_deeply ([$tree->find ('/private', {access => qr/.*/})],
+           ['/private']);
 
 $tree->store ('/private', {type => undef});
 
