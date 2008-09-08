@@ -57,7 +57,7 @@ is_deeply (scalar $tree->get ('/private/fnord'), { access => 'auth',
                                                    otherinfo => 'fnord',
                                                    '.sticky' => 'this is private fnord' });
 
-$tree->store ('/', {access => 'all', type => 'null'}, override_sticky_descendents => 1);
+$tree->store ('/', {access => 'all', type => 'null'}, {override_sticky_descendents => 1});
 
 # Tree is:
 # / [access: all, type: null]
@@ -70,7 +70,7 @@ is_deeply ([$tree->get ('/private/fnord/somewhere/deep')],
 
 my $tree2 = Data::Hierarchy->new();
 $tree2->store ('/private/blah', {access => 'no', type => 'pam', giggle => 'haha'});
-$tree2->store ('/private', {access => 'auth', type => 'pam', blah => 'fnord'}, override_sticky_descendents => 1);
+$tree2->store ('/private', {access => 'auth', type => 'pam', blah => 'fnord'}, {override_sticky_descendents => 1});
 
 # Tree2 is:
 # /private [access: auth, type: pam, blah: fnord]
