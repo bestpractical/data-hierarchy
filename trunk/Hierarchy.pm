@@ -1,5 +1,5 @@
 package Data::Hierarchy;
-$VERSION = '0.19';
+$VERSION = '0.20';
 use strict;
 use Clone qw(clone);
 
