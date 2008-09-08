@@ -128,6 +128,18 @@ it will print 'top'.
 
 sub store {
     my $self = shift;
+    $self->_store_no_cleanup(@_);
+    $self->_remove_redundant_properties_and_undefs;
+}
+
+# Internal method.
+#
+# Does everything that store does, except for the cleanup at the
+# end (appropriate for use in e.g. merge, which calls this a bunch of
+# times and then does cleanup at the end).
+
+sub _store_no_cleanup {
+    my $self = shift;
     my $path = shift;
     my $props = shift;
 
@@ -233,8 +245,10 @@ sub merge {
 	    $other_props->{$_} = undef
 		unless defined $other_props->{$_};
 	}
-	$self->store ($datapoint, $other_props);
+	$self->_store_no_cleanup ($datapoint, $other_props);
     }
+
+    $self->_remove_redundant_properties_and_undefs;
 }
 
 =item C<to_relative $base_path>
@@ -292,7 +306,6 @@ sub _path_safe {
 # Internal method.
 #
 # Actually does property updates (to hash or sticky, depending on name).
-# Calls _remove_redundant_properties_and_undefs at the end.
 
 sub _store {
     my ($self, $path, $new_props) = @_;
@@ -313,8 +326,6 @@ sub _store {
     }
 
     $self->{hash}{$path} = $merged_props;
-
-    $self->_remove_redundant_properties_and_undefs;
 }
 
 # Internal method.
