@@ -1,5 +1,5 @@
 package Data::Hierarchy;
-$VERSION = '0.18';
+$VERSION = '0.19';
 use strict;
 use Clone qw(clone);
 
@@ -36,7 +36,10 @@ filesystem).
 
 sub new {
     my $class = shift;
-    my $self = bless {}, $class;
+    # allow shorthand of ->new({...}) to mean ->new(hash => {...})
+    unshift @_, 'hash' if @_ % 2;
+
+    my $self = bless {@_}, $class;
     $self->{sep} ||= '/';
     $self->{hash} = shift || {};
     $self->{sticky} = {};
