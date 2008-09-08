@@ -23,7 +23,7 @@ Data::Hierarchy - Handle data in a hierarchical structure
     my @items = $tree->find ('/', {access => qr/.*/});
 
     # override all children
-    $tree->store ('/', {'.note' => undef}, override_sticky_descendents => 1);
+    $tree->store ('/', {'.note' => undef}, {override_sticky_descendents => 1});
 
 =head1 DESCRIPTION
 
@@ -100,7 +100,7 @@ sub new {
 
 =cut
 
-=item C<store $path, $properties, %options>
+=item C<store $path, $properties, {%options}>
 
 Given a path and a hash reference of properties, stores the properties
 at the path.
@@ -142,13 +142,14 @@ sub _store_no_cleanup {
     my $self = shift;
     my $path = shift;
     my $props = shift;
+    my $opts = shift || {};
 
     $self->_path_safe ($path);
 
     my %args = (
                override_descendents => 1,
                override_sticky_descendents => 0,
-                @_);
+                %$opts);
 
     $self->_remove_matching_properties_recursively($path, $props, $self->{hash})
       if $args{override_descendents};

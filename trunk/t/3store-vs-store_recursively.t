@@ -48,25 +48,25 @@ test_foo_and_bar
   [{a => 1, '.k' => 20}, '/foo'];
 
 reset_tree();
-$TREE->store('/foo', {a => 1}, override_sticky_descendents => 1);
+$TREE->store('/foo', {a => 1}, {override_sticky_descendents => 1});
 test_foo_and_bar
   [{a => 1, '.k' => 10}, '/foo'],
   [{a => 1, '.k' => 20}, '/foo'];
 
 reset_tree();
-$TREE->store('/foo', {a => 3}, override_sticky_descendents => 1);
+$TREE->store('/foo', {a => 3}, {override_sticky_descendents => 1});
 test_foo_and_bar
   [{a => 3, '.k' => 10}, '/foo'],
   [{a => 3, '.k' => 20}, '/foo'];
 
 reset_tree();
-$TREE->store('/foo', {a => 1}, override_descendents => 0);
+$TREE->store('/foo', {a => 1}, {override_descendents => 0});
 test_foo_and_bar
   [{a => 1, '.k' => 10}, '/foo'],
   [{a => 2, '.k' => 20}, '/foo', '/foo/bar'];
 
 reset_tree();
-$TREE->store('/foo', {a => 3}, override_descendents => 0);
+$TREE->store('/foo', {a => 3}, {override_descendents => 0});
 test_foo_and_bar
   [{a => 3, '.k' => 10}, '/foo'],
   [{a => 2, '.k' => 20}, '/foo', '/foo/bar'];
@@ -78,13 +78,13 @@ test_foo_and_bar
   [{'.k' => 20}];
 
 reset_tree();
-$TREE->store('/foo', {a => undef}, override_descendents => 0);
+$TREE->store('/foo', {a => undef}, {override_descendents => 0});
 test_foo_and_bar
   [{'.k' => 10}],
   [{a => 2, '.k' => 20}, '/foo/bar'];
 
 reset_tree();
-$TREE->store('/foo', {a => undef}, override_sticky_descendents => 1);
+$TREE->store('/foo', {a => undef}, {override_sticky_descendents => 1});
 test_foo_and_bar
   [{'.k' => 10}],
   [{'.k' => 20}];
@@ -104,25 +104,25 @@ test_foo_and_bar
   [{a => 2, '.k' => 20}, '/foo', '/foo/bar'];
 
 reset_tree();
-$TREE->store('/foo', {'.k' => 10}, override_sticky_descendents => 1);
+$TREE->store('/foo', {'.k' => 10}, {override_sticky_descendents => 1});
 test_foo_and_bar
   [{a => 1, '.k' => 10}, '/foo'],
   [{a => 2}, '/foo', '/foo/bar'];
 
 reset_tree();
-$TREE->store('/foo', {'.k' => 30}, override_sticky_descendents => 1);
+$TREE->store('/foo', {'.k' => 30}, {override_sticky_descendents => 1});
 test_foo_and_bar
   [{a => 1, '.k' => 30}, '/foo'],
   [{a => 2}, '/foo', '/foo/bar'];
 
 reset_tree();
-$TREE->store('/foo', {'.k' => 10}, override_descendents => 0);
+$TREE->store('/foo', {'.k' => 10}, {override_descendents => 0});
 test_foo_and_bar
   [{a => 1, '.k' => 10}, '/foo'],
   [{a => 2, '.k' => 20}, '/foo', '/foo/bar'];
 
 reset_tree();
-$TREE->store('/foo', {'.k' => 30}, override_descendents => 0);
+$TREE->store('/foo', {'.k' => 30}, {override_descendents => 0});
 test_foo_and_bar
   [{a => 1, '.k' => 30}, '/foo'],
   [{a => 2, '.k' => 20}, '/foo', '/foo/bar'];
@@ -135,13 +135,13 @@ test_foo_and_bar
   [{a => 2, '.k' => 20}, '/foo', '/foo/bar'];
 
 reset_tree();
-$TREE->store('/foo', {'.k' => undef}, override_sticky_descendents => 1);
+$TREE->store('/foo', {'.k' => undef}, {override_sticky_descendents => 1});
 test_foo_and_bar
   [{a => 1}, '/foo'],
   [{a => 2}, '/foo', '/foo/bar'];
 
 reset_tree();
-$TREE->store('/foo', {'.k' => undef}, override_descendents => 0);
+$TREE->store('/foo', {'.k' => undef}, {override_descendents => 0});
 test_foo_and_bar
   [{a => 1}, '/foo'],
   [{a => 2, '.k' => 20}, '/foo', '/foo/bar'];
@@ -169,37 +169,37 @@ test_foo_and_bar
   [{a => 3, '.k' => 20}, '/foo', '/foo/bar'];
 
 reset_tree();
-$TREE->store('/foo/bar', {a => 2}, override_descendents => 0);
+$TREE->store('/foo/bar', {a => 2}, {override_descendents => 0});
 test_foo_and_bar
   [{a => 1, '.k' => 10}, '/foo'],
   [{a => 2, '.k' => 20}, '/foo', '/foo/bar'];
 
 reset_tree();
-$TREE->store('/foo/bar', {a => 1}, override_descendents => 0);
+$TREE->store('/foo/bar', {a => 1}, {override_descendents => 0});
 test_foo_and_bar
   [{a => 1, '.k' => 10}, '/foo'],
   [{a => 1, '.k' => 20}, '/foo'];
 
 reset_tree();
-$TREE->store('/foo/bar', {a => 3}, override_descendents => 0);
+$TREE->store('/foo/bar', {a => 3}, {override_descendents => 0});
 test_foo_and_bar
   [{a => 1, '.k' => 10}, '/foo'],
   [{a => 3, '.k' => 20}, '/foo', '/foo/bar'];
 
 reset_tree();
-$TREE->store('/foo/bar', {a => 2}, override_sticky_descendents => 1);
+$TREE->store('/foo/bar', {a => 2}, {override_sticky_descendents => 1});
 test_foo_and_bar
   [{a => 1, '.k' => 10}, '/foo'],
   [{a => 2, '.k' => 20}, '/foo', '/foo/bar'];
 
 reset_tree();
-$TREE->store('/foo/bar', {a => 1}, override_sticky_descendents => 1);
+$TREE->store('/foo/bar', {a => 1}, {override_sticky_descendents => 1});
 test_foo_and_bar
   [{a => 1, '.k' => 10}, '/foo'],
   [{a => 1, '.k' => 20}, '/foo'];
 
 reset_tree();
-$TREE->store('/foo/bar', {a => 3}, override_sticky_descendents => 1);
+$TREE->store('/foo/bar', {a => 3}, {override_sticky_descendents => 1});
 test_foo_and_bar
   [{a => 1, '.k' => 10}, '/foo'],
   [{a => 3, '.k' => 20}, '/foo', '/foo/bar'];
