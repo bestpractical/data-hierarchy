@@ -1,0 +1,7 @@
+MANIFEST
+CHANGES
+README
+Makefile.PL
+Hierarchy.pm
+t/1basic.t
+META.yml                                Module meta-data (added by MakeMaker)
