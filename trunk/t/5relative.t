@@ -20,4 +20,4 @@ my $tnew = $rel->to_absolute('/beep');
 is($tnew->get('/beep')->{A}, 1);
 is($tnew->get('/beep/bar/baz')->{A}, 4);
 
-throws_ok { $t->to_relative('/fo') } qr!/foo/bar/baz is not a child of /fo!;
+throws_ok { $t->to_relative('/fo') } qr!/foo is not a child of /fo!;

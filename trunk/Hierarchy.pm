@@ -1,5 +1,5 @@
 package Data::Hierarchy;
-$VERSION = '0.30';
+$VERSION = '0.31';
 use strict;
 use Storable qw(dclone);
 # XXX consider using Moose
@@ -505,7 +505,7 @@ sub new {
         my $original = $args{$item};
         my $result = {};
 
-        for my $path (keys %$original) {
+        for my $path (sort keys %$original) {
             unless ($path eq $base_path or index($path, $base_path . $self->{sep}) == 0) {
                 require Carp;
                 Carp::confess("$path is not a child of $base_path");
