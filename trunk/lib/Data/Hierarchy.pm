@@ -226,7 +226,7 @@ sub get {
 =item C<find $path, $property_regexps>
 
 Given a path and a hash reference of name/regular expression pairs,
-returns a list of all paths which are descendents of C<$path>
+returns a sorted list of all paths which are descendents of C<$path>
 (including itself) and define B<at that path itself> (not inherited)
 all of the properties in the hash with values matching the given
 regular expressions.  (You may want to use C<qr/.*/> to merely see if
@@ -268,7 +268,7 @@ sub find {
 
     $recursive->($self->_root_without_sep($path), $node);
 
-    return @$items;
+    return sort @$items;
 }
 
 =item C<defines $path, $property>
